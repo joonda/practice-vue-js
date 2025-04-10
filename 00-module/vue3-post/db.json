@@ -1,0 +1,46 @@
+{
+  "posts": [
+    {
+      "title": "수정했습니다.",
+      "content": "수정해서 기분이 좋아요 블끼얏호우! ",
+      "createdAt": 1744271604016,
+      "id": "1"
+    },
+    {
+      "id": "2",
+      "title": "제목 2",
+      "content": "내용 2",
+      "createdAt": "2020-02-02"
+    },
+    {
+      "id": "3",
+      "title": "제목 3",
+      "content": "내용 3",
+      "createdAt": "2020-03-03"
+    },
+    {
+      "id": "4",
+      "title": "제목 4",
+      "content": "내용 4",
+      "createdAt": "2020-04-04"
+    },
+    {
+      "id": "6",
+      "title": "제목 6",
+      "content": "내용 6",
+      "createdAt": "2020-06-06"
+    },
+    {
+      "id": "10",
+      "title": "ee",
+      "content": "eee",
+      "createdAt": 1744268523927
+    },
+    {
+      "id": "11",
+      "title": "asdf",
+      "content": "asdf",
+      "createdAt": 1744268539736
+    }
+  ]
+}
