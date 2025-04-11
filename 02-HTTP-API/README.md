@@ -299,3 +299,254 @@ const removePost = () => {
 ```
 * `@click`으로 `removePost` 함수 지정
   * `deletePost` api 호출 후, id를 파라미터 값으로 넘겨줌
+
+### 2. Pagination & Filter 구현하기
+#### Pagination
+
+`src` > `views` > `posts` > `PostListView.vue`
+```vue
+<template>
+  <div>
+    <h2>게시글 목록</h2>
+    <hr class="my-4" />
+    <div class="row g-3">
+      <div v-for="post in posts" :key="post.id" class="col-4">
+        <PostItem
+          :title="post.title"
+          :content="post.content"
+          :createdAt="post.createdAt"
+          @click="goPage(post.id)"
+        ></PostItem>
+      </div>
+    </div>
+    <nav class="mt-5" aria-label="Page navigation example">
+      <ul class="pagination justify-content-center">
+        <li class="page-item" :class="{ disabled: !(params._page > 1) }">
+          <a class="page-link" href="#" aria-label="Previous" @click.prevent="--params._page">
+            <span aria-hidden="true">&laquo;</span>
+          </a>
+        </li>
+        <li
+          v-for="page in pageCount"
+          :key="page"
+          class="page-item"
+          :class="{ active: params._page === page }"
+        >
+          <a class="page-link" href="#" @click.prevent="params._page = page">{{ page }}</a>
+        </li>
+        <li class="page-item" :class="{ disabled: !(params._page < pageCount) }">
+          <a class="page-link" href="#" aria-label="Next" @click.prevent="++params._page">
+            <span aria-hidden="true">&raquo;</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+  <br class="my-5" />
+  <AppCard>
+    <PostDetailView :id="2"></PostDetailView>
+  </AppCard>
+</template>
+
+<script setup>
+import PostItem from '@/components/posts/PostItem.vue'
+import AppCard from '@/components/AppCard.vue'
+import { computed, ref, watchEffect } from 'vue'
+import { getPosts } from '@/api/posts'
+import { useRouter } from 'vue-router'
+import PostDetailView from './PostDetailView.vue'
+
+const router = useRouter()
+const posts = ref([])
+// pagination
+
+const params = ref({
+  _sort: 'createdAt',
+  _order: 'desc',
+  _page: 1,
+  _limit: 3,
+})
+
+const totalCount = ref(0)
+const pageCount = computed(() => Math.ceil(totalCount.value / params.value._limit))
+
+const fetchPosts = async () => {
+  try {
+    const { data, headers } = await getPosts(params.value)
+    posts.value = data
+    totalCount.value = headers['x-total-count']
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+// fetchPosts()
+watchEffect(fetchPosts)
+const goPage = (id) => {
+  // router.push(`/posts/${id}`)
+  router.push({
+    name: 'PostDetail',
+    params: {
+      id,
+    },
+  })
+}
+</script>
+
+<style lang="scss" scoped></style>
+```
+##### 현재 버전 이슈로 json-server 0.17.4 버전 install 하고 진행함
+* `_sort`, `_order` 파라미터를 활용해서 내림차순으로 구현
+* `totalCount`를 동적으로 선언한 후, `headers`의 `x-total-count`를 받아온다.
+* 또한 `pageCount`를 `computed`로 선언한 후, `totalCount` / `limit`를 올림 처리하여 총 페이지의 개수를 구한다.
+  * 이를 `v-for`로 돌리면서 `{{page}}`를 넣어준다.
+  * 이후 `:class`로 `active`를 줘서 해당되는 페이지로 이동 시, 강조 효과를 준다.
+* `<a class="page-link" href="#" @click.prevent="params._page = page">{{ page }}</a>` `@click` 이벤트로 원하는 페이지로 이동할 수 있도록 구현한다.
+* `<<` `>>`도 `@click` 이벤트로 증감 연산자를 통해 구현 (++params._page, --params._page)
+  * params._page가 pageCount보다 크다면 (같은 것도 포함), `>>` 을 비활성화
+  * params._page가 1보다 작아진다면 (같은 것도 포함) `<<`을 비활성화
+
+#### Filter
+* json-server 에서 제공하는 `title_like`로 Filter 기능을 구현할 수 있다.
+
+```vue
+<template>
+  <form @submit.prevent>
+    <div class="row g-3">
+      <div class="col">
+        <input v-model="params.title_like" type="text" class="form-control" />
+      </div>
+      <div class="col-3">
+        <select v-model="params._limit" class="form-select">
+          <option value="3">3개씩 보기</option>
+          <option value="6">6개씩 보기</option>
+          <option value="9">9개씩 보기</option>
+        </select>
+      </div>
+    </div>
+  </form>
+</template>
+
+<script setup>
+const params = ref({
+  _sort: 'createdAt',
+  _order: 'desc',
+  _page: 1,
+  _limit: 3,
+  title_like: '',
+})
+</script>
+```
+* `title_like`와 `form` 안에 있는 `input` 태그에 양방향 바인딩을 할 수 있다.
+  * 또한 `watchEffect`로 `fetchPosts`함수 내의 값이 동적으로 변경될 때 마다 자동으로 다시 콜백하기 때문에 자동으로 필터링이 구현된다
+* `v-model`을 통해서 또한 value 값을 `_limit`와 연동하여 n개씩 보기를 구현할 수 있다.
+
+### 3. axios 모듈 & Vite 환경 변수 설정 (env)
+#### axios
+* axios에서는 create를 통해서 Instance를 만들 수 있도록 지원한다.
+
+* `src` > `api` > `index.js`
+
+```javascript
+import axios from 'axios'
+
+function create(baseURL, options) {
+  const instance = axios.create(Object.assign({ baseURL }, options))
+  return instance
+}
+
+export const posts = create('http://localhost:5000/posts/')
+```
+
+* `src` > `api` > `posts.js`
+
+```javascript
+import { posts } from '.'
+
+export function getPosts(params) {
+  return posts.get('/', { params })
+}
+
+export function getPostById(id) {
+  return posts.get(`/${id}`)
+}
+
+export function createPost(data) {
+  return posts.post('/', data)
+}
+
+export function updatePost(id, data) {
+  return posts.put(`/${id}`, data)
+}
+
+export function deletePost(id) {
+  return posts.delete(`/${id}`)
+}
+```
+* 이렇게 중복되는 코드를 제거하여 깔끔하게 유지할 수 있다.
+
+#### Vite
+* Vite에서 환경변수를 가져올 때는 `import.meta.env`로 가져올 수 있다
+
+* `src` > `main.js`
+```javascript
+console.log('MODE: ', import.meta.env.MODE)
+console.log('BASE_URL: ', import.meta.env.BASE_URL)
+console.log('PROD: ', import.meta.env.PROD)
+console.log('DEV: ', import.meta.env.DEV)
+```
+* MODE는 현재 어떤 모드인지 알려주는 환경변수
+* BASE_URL은 기본 세팅된 URL
+* PROD -> 현재 production 모드인지 알려줌 (T/F)
+* DEV -> 현재 Development 모드인지 알려줌 (T/F)
+
+`vite.config.js`
+```javascript
+import { fileURLToPath, URL } from 'node:url'
+
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vueDevTools from 'vite-plugin-vue-devtools'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [
+    vue(),
+    vueDevTools(),
+  ],
+  mode: 'development',
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    },
+  },
+})
+```
+* 여기에 option으로 mode를 설정할 수 있다.
+  * 기본은 development 모드, 빌드할때는 production 모드로 설정
+* 다른 변수를 가져오기 위해서는 환경변수 파일을 설정해야한다 (`env`)
+
+`.env`
+```env
+VITE_APP_API_URL=http://localhost:5001/
+```
+
+`.env.development`
+```env
+VITE_APP_API_URL=http://localhost:5000/
+```
+
+`main.js`
+```javascript
+console.log('env: ', import.meta.env.VITE_APP_API_URL)
+```
+
+* 여기서 중요한 점은, VITE를 prefix로 꼭 붙여줘야한다는 점! (없으면 못가져온다.)
+  * envPrefix가 default로 `VITE_`로 되어있다.
+  * 변경을 원한다면 `vite.config.js` 에서 `envPrefix` 옵션으로 변경할 수 있다.
+
+`index.js`
+```javascript
+export const posts = create(`${import.meta.env.VITE_APP_API_URL}posts/`)
+```
+* 이렇게 구현할 수 있다.
